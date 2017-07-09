@@ -1,6 +1,13 @@
 #!/bin/bash
 
-VERSION=1.6
+VERSION=1.6a
+# Version 1.6a	Merged from https://github.com/crowzero/rpi-clone/blob/master/rpi-clone
+#	* add -q (quiet) option for use as cron script
+#         -q only works with existing backups, 
+#         it won't initialize the destination SD card partitions with dd!
+#         Please initialize the destination SD card from the shell (by hand)
+#         for the first time.
+#         This is to protect you for accidentally overwriting a SD Card.
 # Version 1.6	2017/05/24
 #	* Split rsync into 2 separate processes, 1 for /boot, 1 for rest of filesystem
 #	* made do not cross filesytem boundaries default behaviour
@@ -75,6 +82,7 @@ usage()
 	echo "    -f - force initialize the destination partitions"
 	echo "    -c - cross filesystem boundaries (include mounted drives)"
 	echo "    -x - use set -x for very verbose bash shell script debugging"
+	echo "    -q - use quiet mode to schedule the script as a cron script"
 	echo ""
 	echo "    Clone (rsync) a running Raspberry Pi file system to a destination"
 	echo "    SD card 'sdN' plugged into a Pi USB port (via a USB card reader)."
@@ -112,6 +120,7 @@ usage()
 
 VERBOSE=off
 CROSS_FILESYSTEMS=off
+QUITE_FOR_CRON=false
 
 while [ "$1" ]
 do
@@ -132,6 +141,9 @@ do
 			;;
 		-h|--help)
 			usage
+			;;
+		-q|--quite)
+			QUITE_FOR_CRON=true
 			;;
 		*)
 			if [ "$DST_DISK" != "" ]
@@ -187,6 +199,12 @@ fi
 
 unmount_or_abort()
 	{
+	if [ "$QUITE_FOR_CRON" = "true" ]
+	then
+		echo "Sorry, mounted devices in quite_cron mode is not allowed."
+		echo -e "Aborting!\n"
+		exit 0
+	fi
 	echo -n "Do you want to unmount $1? (yes/no): "
 	read resp
 	if [ "$resp" = "y" ] || [ "$resp" = "yes" ]
@@ -290,6 +308,12 @@ if [ "$DST_BOOT_PARTITION_TYPE" != "$SRC_BOOT_PARTITION_TYPE" ] || \
    [ "$DST_ROOT_PARTITION_TYPE" != "$SRC_ROOT_PARTITION_TYPE" ] || \
    [ "$FORCE_INITIALIZE" = "true" ]
 then
+	if [ "$QUITE_FOR_CRON" = "true" ]
+	then
+		echo "Sorry, now new disk setup allowed in quite_cron mode."
+		echo -e "Aborting!\n"
+		exit 0
+	fi
 	CLONE_MODE="rsync all files to $DST_DISK root file system"
 	echo ""
 	if [ "$FORCE_INITIALIZE" = "true" ]
@@ -397,8 +421,14 @@ echo "==============================="
 # If this is an SD card initialization, can watch progress of the clone
 # in another terminal with:  watch df -h
 #
-echo -n "Final check, is it Ok to proceed with the clone (yes/no)?: "
-read resp
+
+if [ "$QUITE_FOR_CRON" != "true" ]
+then
+	echo -n "Final check, is it Ok to proceed with the clone (yes/no)?: "
+	read resp
+else
+	resp="y"
+fi
 if [ "$resp" != "y" ] && [ "$resp" != "yes" ]
 then
 	echo -e "Aborting the disk clone.\n"
@@ -520,8 +550,11 @@ echo ""
 # Eg. modify $CLONE/etc/hostname, $CLONE/etc/network/interfaces, etc
 # if I'm cloning into a card to be installed on another Pi.
 #
-echo -n "Hit Enter when ready to unmount the /dev/$DST_DISK partitions..."
-read resp
+if [ "$QUITE_FOR_CRON" != "true" ]
+then
+	echo -n "Hit Enter when ready to unmount the /dev/$DST_DISK partitions..."
+	read resp
+fi
 
 echo "unmounting $CLONE/boot"
 umount $CLONE/boot
