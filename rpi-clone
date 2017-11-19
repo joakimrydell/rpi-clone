@@ -35,7 +35,7 @@ VERSION=1.6a
 
 PGM=`basename $0`
 
-RSYNC_OPTIONS="--force -rltWDEgoptx"
+RSYNC_OPTIONS="--force -rltWDEgoptxaHS"
 
 # Where to mount the disk filesystems to be rsynced.
 CLONE=/mnt/clone
